@@ -1,5 +1,21 @@
-# Desarrollo de la sección 3. Ahora con otra red y datos
+import pandas as pd
+from pgmpy.models import BayesianNetwork
+from pgmpy.estimators import MaximumLikelihoodEstimator
+from sklearn.model_selection import train_test_split
+from pgmpy.inference import VariableElimination
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.metrics import roc_curve, auc
+from pgmpy.factors.discrete import TabularCPD
+from pgmpy.estimators import BayesianEstimator
+import pickle
+from pgmpy.estimators import HillClimbSearch
+from pgmpy.estimators import K2Score
+from pgmpy.estimators import BicScore
+from pgmpy.estimators import PC
+
+# Desarrollo de la sección 3. Ahora con otra red y datos
 # Define some important functions
 
 def get_probs_dropout(probs_vector):
@@ -74,26 +90,18 @@ def plot_roc(probs, true_labels, title="ROC Curve", figsize=(10, 6)):
 
 
 # Importar los paquetes requeridos
-import pandas as pd
-from pgmpy.models import BayesianNetwork
-from pgmpy.estimators import MaximumLikelihoodEstimator
-from sklearn.model_selection import train_test_split
-from pgmpy.inference import VariableElimination
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import roc_curve, auc
-from pgmpy.factors.discrete import TabularCPD
-from pgmpy.estimators import BayesianEstimator
-import pickle
+
 
 # Definir el path en dónde se encuentran los datos
-path_datos_samuel = 'C:/Users/berna/OneDrive/Escritorio/Universidad de los Andes/Semestre 2023-2/Análitica Computacional para la Toma de Decisiones/Proyecto/predict+students+dropout+and+academic+success'
+path_datos_samuel = 'C:/Users/berna/OneDrive/Escritorio/Universidad de los Andes/Semestre 2023-2/Análitica Computacional para la Toma de Decisiones/Proyecto 2/data/processed'
 path_datos_juan = '/Users/juandramirezj/Documents/Universidad - MIIND/ACTD/proyecto_1/project_1_ACTD/data/processed'
-path_datos_actual = path_datos_juan
+path_datos_actual = path_datos_samuel
 # Cargar los datos
-train_data = pd.read_csv(path_datos_actual+'/train.csv', delimiter=";")
-test_data = pd.read_csv(path_datos_actual+'/test.csv', delimiter=";")
+train_data = pd.read_csv(path_datos_actual+'/train.csv')
+test_data = pd.read_csv(path_datos_actual+'/test.csv')
+train_data.head()
+train_data.columns
+test_data.head()
 # model1
 # Definir la red bayesiana
 model1 = BayesianNetwork([("Unemployment rate", "perc_approved_sem1"), ("Inflation rate", "perc_approved_sem1"),
@@ -119,151 +127,74 @@ for index, row in test_data.iterrows():
                                                                   "Scholarship holder": row["Scholarship holder"]})
     target_probabilities1.append(prob)
 
-# Print the probabilities: OJO FALTA MIRAR ESTO
+# Structure learning based on the evidence of model 1
 
-# model2
-# Definir la red bayesiana
-model2 = BayesianNetwork([("Previous qualification (grade)", "Debtor"), ("Previous qualification (grade)", "Scholarship holder"), ("Previous qualification (grade)", "perc_approved_sem1"),
-                          ("Admission grade", "Debtor"), ("Admission grade", "Scholarship holder"), ("Admission grade", "perc_approved_sem1"),
-                          ("Debtor", "perc_approved_sem2"), ("Scholarship holder", "perc_approved_sem2"), ("perc_approved_sem1", "perc_approved_sem2"),
-                          ("perc_approved_sem2","actual_target")])
-model2.fit(data=train_data, estimator=MaximumLikelihoodEstimator)
-for i in model2.nodes():
-    print(model2.get_cpds(i))
 
-# Predict probabilities for testing
+# Let's say you want to keep only the columns 'Age at enrollment', 'Target', and 'Debtor'
+columns_to_keep = ['Age at enrollment', 'actual_target', 'Debtor', 'Unemployment rate', 'Scholarship holder', 'Inflation rate']
 
-# Initialize VariableElimination class with the model
-inference = VariableElimination(model2)
-# For each row in the test_data, predict the probability of "lung"
-target_probabilities2 = []
-for index, row in test_data.iterrows():
-    prob = inference.query(variables=["actual_target"], evidence={"Previous qualification (grade)": row["Previous qualification (grade)"],
-                                                                  "Admission grade": row["Admission grade"]})
-    target_probabilities2.append(prob)
+# Filter the DataFrame
+filtered_data = train_data[columns_to_keep]
+est = PC(data=filtered_data)
+# Restriction Method
+estimated_model = est.estimate(variant="stable", max_cond_vars=10)
+print(estimated_model)
+print(estimated_model.nodes())
+print(estimated_model.edges())
 
-# Model3
-# Definir la red bayesiana
-model3 = BayesianNetwork([("International", "perc_approved_sem1"), ("Marital status", "perc_approved_sem1"), ("Gender", "perc_approved_sem1"),
-                          ("Unemployment rate", "perc_approved_sem1"), ("Inflation rate", "perc_approved_sem1"), ("Displaced", "perc_approved_sem1"),
-                          ("Educational special needs", "perc_approved_sem1"), ("perc_approved_sem1", "perc_approved_sem2"), ("Scholarship holder", "actual_target"),
-                          ("perc_approved_sem2","actual_target"), ("Debtor","actual_target")])
+##Scoring Methods
 
-model3.fit(data=train_data, estimator=MaximumLikelihoodEstimator)
+# Hill Climb Search Method
 
-for i in model3.nodes():
-    print(model3.get_cpds(i))
+scoring_method = K2Score(data=filtered_data)
+esth = HillClimbSearch(data=filtered_data)
+estimated_modelh = esth.estimate(
+    scoring_method=scoring_method, max_indegree=4, max_iter=int(1e4)
+)
+print(estimated_modelh)
+print(estimated_modelh.nodes())
+print(estimated_modelh.edges())
+print(scoring_method.score(estimated_modelh))
 
-# Predict probabilities for testing
+#Big Score Method
+scoring_method = BicScore(data=filtered_data)
+esth = HillClimbSearch(data=filtered_data)
+estimated_modelh = esth.estimate(
+    scoring_method=scoring_method, max_indegree=10, max_iter=int(1e4)
+)
+print(estimated_modelh)
+print(estimated_modelh.nodes())
+print(estimated_modelh.edges())
+print(scoring_method.score(estimated_modelh))
 
-# Initialize VariableElimination class with the model
-inference = VariableElimination(model3)
-# For each row in the test_data, predict the probability of "lung"
-target_probabilities3 = []
+## Estimated Model
+modelE = BayesianNetwork([ ("Scholarship holder", "actual_target")])
 
-for index, row in test_data.iterrows():
-    prob = inference.query(variables=["actual_target"], evidence={"International": row["International"],
-                                                                  "Marital status": row["Marital status"],
-                                                                  "Gender": row["Gender"],
-                                                                  "Unemployment rate": row["Unemployment rate"],
-                                                                  "Inflation rate": row["Inflation rate"],
-                                                                  "Displaced": row["Displaced"],
-                                                                  "Educational special needs": row["Educational special needs"],
-                                                                  "Scholarship holder": row["Scholarship holder"],
-                                                                  "Debtor": row["Debtor"]})
-    target_probabilities3.append(prob)
-
-# model4
-# Definir la red bayesiana
-model4 = BayesianNetwork([("International", "Debtor"), ("Displaced", "Debtor"),
-                          ("Debtor", "perc_approved_sem2"), ("Marital status", "actual_target"),
-                          ("perc_approved_sem2","actual_target")])
-model4.fit(data=train_data, estimator=MaximumLikelihoodEstimator)
-for i in model4.nodes():
-    print(model4.get_cpds(i))
+modelE.fit(data=train_data, estimator=MaximumLikelihoodEstimator)
+for i in modelE.nodes():
+    print(modelE.get_cpds(i))
 
 # Predict probabilities for testing
 
 # Initialize VariableElimination class with the model
-inference = VariableElimination(model4)
+inference = VariableElimination(modelE)
 # For each row in the test_data, predict the probability of "lung"
-target_probabilities4 = []
+target_probabilitiesE = []
 for index, row in test_data.iterrows():
-    prob = inference.query(variables=["actual_target"], evidence={"International": row["International"],
-                                                                  "Marital status": row["Marital status"],
-                                                                  "Displaced": row["Displaced"]})
-    target_probabilities4.append(prob)
-
-# model5
-# Definir la red bayesiana
-model5 = BayesianNetwork([("Age at enrollment", "Admission grade"), ("Educational special needs", "Admission grade"),
-                          ("Admission grade", "perc_approved_sem1"), ("Debtor", "actual_target"),
-                          ("perc_approved_sem1","actual_target")])
-model5.fit(data=train_data, estimator=MaximumLikelihoodEstimator)
-for i in model5.nodes():
-    print(model5.get_cpds(i))
-
-# Predict probabilities for testing
-
-# Initialize VariableElimination class with the model
-inference = VariableElimination(model5)
-# For each row in the test_data, predict the probability of "lung"
-target_probabilities5 = []
-for index, row in test_data.iterrows():
-    prob = inference.query(variables=["actual_target"], evidence={"Age at enrollment": row["Age at enrollment"],
-                                                                  "Educational special needs": row["Educational special needs"],
-                                                                  "Debtor": row["Debtor"]})
-    target_probabilities5.append(prob)
-
-# Model 6 (Bayesian estimation)
-
-
-mod_fit_by = BayesianNetwork([("Debtor", "perc_approved_sem2"), ("Scholarship holder", "perc_approved_sem2"),
-                         ("perc_approved_sem2", "actual_target")])
-
-# Define some pseudo_counts for demonstration
-pseudo_counts = {
-    "Debtor": np.array([[0], [0]]), 
-    "Scholarship holder": np.array([[0], [0]]),
-    "perc_approved_sem2": np.array([[0, 0, 0, 0], [0, 0, 0, 0]]),
-    "actual_target": np.array([[2500, 7500], [7500, 2500]])
-}
-
-# Fit the model using Bayesian Estimation
-mod_fit_by.fit(data=train_data, estimator=BayesianEstimator, prior_type='dirichlet', pseudo_counts=pseudo_counts)
-# Print the CPDs for the nodes in the network
-for node in mod_fit_by.nodes():
-    print(mod_fit_by.get_cpds(node))
-    print("\n")
-
-# Initialize VariableElimination class with the model
-inference = VariableElimination(mod_fit_by)
-# For each row in the test_data, predict the probability of "lung"
-target_probabilities_by = []
-for index, row in test_data.iterrows():
-    prob = inference.query(variables=["actual_target"], evidence={"Debtor": row["Debtor"],
-                                                                  "Scholarship holder": row["Scholarship holder"]})
-    target_probabilities_by.append(prob)
+    prob = inference.query(variables=["actual_target"], evidence={"Scholarship holder": row["Scholarship holder"]})
+    target_probabilitiesE.append(prob)
 
 
 # UNTIL HERE WE ALREADY FOUND PREDICTED PROBAILITIES ON TEST
 
 # Get the final probabilities of each model
 probs_dropout1 = get_probs_dropout(target_probabilities1)
-probs_dropout2 = get_probs_dropout(target_probabilities2)
-probs_dropout3 = get_probs_dropout(target_probabilities3)
-probs_dropout4 = get_probs_dropout(target_probabilities4)
-probs_dropout5 = get_probs_dropout(target_probabilities5)
-probs_dropout_by = get_probs_dropout(target_probabilities_by)
+probs_dropoutE = get_probs_dropout(target_probabilitiesE)
+
 
 
 probs_df_1 = pd.DataFrame(probs_dropout1, columns=['Probability'])
-probs_df_2 = pd.DataFrame(probs_dropout2, columns=['Probability'])
-probs_df_3 = pd.DataFrame(probs_dropout3, columns=['Probability'])
-probs_df_4 = pd.DataFrame(probs_dropout4, columns=['Probability'])
-probs_df_5 = pd.DataFrame(probs_dropout5, columns=['Probability'])
-probs_df_by = pd.DataFrame(probs_dropout_by, columns=['Probability'])
-
+probs_df_E = pd.DataFrame(probs_dropoutE, columns=['Probability'])
 
 # Get descriptive statistics
 quantile_cutoff = 1 - train_data['actual_target'].mean()
@@ -271,21 +202,11 @@ print(quantile_cutoff)
 
 
 cutoff1 = probs_df_1['Probability'].quantile(quantile_cutoff)
-cutoff2 = probs_df_2['Probability'].quantile(quantile_cutoff)
-cutoff3 = probs_df_3['Probability'].quantile(quantile_cutoff)
-cutoff4 = probs_df_4['Probability'].quantile(quantile_cutoff)
-cutoff5 = probs_df_5['Probability'].quantile(quantile_cutoff)
-cutoff_by = probs_df_by['Probability'].quantile(quantile_cutoff)
-
+cutoffE = probs_df_E['Probability'].quantile(quantile_cutoff)
 
 # Métricas de desempeño
 performance1 = evaluate_performance(probs_dropout1, test_data['actual_target'], threshold=cutoff1)
-performance2 = evaluate_performance(probs_dropout2, test_data['actual_target'], threshold=cutoff2)
-performance3 = evaluate_performance(probs_dropout3, test_data['actual_target'], threshold=cutoff3)
-performance4 = evaluate_performance(probs_dropout4, test_data['actual_target'], threshold=cutoff4)
-performance5 = evaluate_performance(probs_dropout5, test_data['actual_target'], threshold=cutoff5)
-performance_by = evaluate_performance(probs_dropout_by, test_data['actual_target'], threshold=cutoff_by)
-
+performanceE = evaluate_performance(probs_dropoutE, test_data['actual_target'], threshold=cutoffE)
 
 print('------------------------')
 print('Model 1 results')
@@ -293,38 +214,13 @@ for key, value in performance1.items():
     print(f"{key}: {value}")
 
 print('------------------------')
-print('Model 2 results')
-for key, value in performance2.items():
-    print(f"{key}: {value}")
-
-print('------------------------')
-print('Model 3 results')
-for key, value in performance3.items():
-    print(f"{key}: {value}")
-
-print('------------------------')
-print('Model 4 results')
-for key, value in performance4.items():
-    print(f"{key}: {value}")
-
-print('------------------------')
-print('Model 5 results')
-for key, value in performance5.items():
-    print(f"{key}: {value}")
-
-print('------------------------')
-print('Model 6 (Bayesian estimation) results')
-for key, value in performance_by.items():
+print('Estimated Model results')
+for key, value in performanceE.items():
     print(f"{key}: {value}")
 
 
 plot_roc(probs_dropout1, test_data['actual_target'], title="Model 1 ROC Curve: Testing data")
-plot_roc(probs_dropout2, test_data['actual_target'], title="Model 2 ROC Curve: Testing data")
-plot_roc(probs_dropout3, test_data['actual_target'], title="Model 3 ROC Curve: Testing data")
-plot_roc(probs_dropout4, test_data['actual_target'], title="Model 4 ROC Curve: Testing data")
-plot_roc(probs_dropout5, test_data['actual_target'], title="Model 5 ROC Curve: Testing data")
-plot_roc(probs_dropout_by, test_data['actual_target'], title="Model 6 ROC Curve: Testing data")
-
+plot_roc(probs_dropoutE, test_data['actual_target'], title="Estimated Model ROC Curve: Testing data")
 # The best model was model #1
 
 # Save the best model: Model 1
@@ -332,5 +228,12 @@ parts = path_datos_actual.split('/')
 
 desired_path = '/'.join(parts[:(len(parts)-1)])
 
-with open(desired_path+'/models/model1.pkl', 'wb') as file:
+with open(desired_path+'/model1.pkl', 'wb') as file:
     pickle.dump(model1, file)
+# Save the best model: Estimated Model
+parts = path_datos_actual.split('/')
+
+desired_path = '/'.join(parts[:(len(parts)-1)])
+
+with open(desired_path+'/estimated_model.pkl', 'wb') as file:
+    pickle.dump(modelE, file)
