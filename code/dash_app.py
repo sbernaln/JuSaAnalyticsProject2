@@ -13,7 +13,7 @@ from dash_core_components import Tabs, Tab
 
 # Replace these with your actual credentials
 username = 'postgres'
-password = 'jusa_analytics_project2'
+password = '...' #Ask for the password
 host = 'database-2.cdwvwtd3pmq1.us-east-1.rds.amazonaws.com'
 port = '5432'
 database_name = 'postgres'
